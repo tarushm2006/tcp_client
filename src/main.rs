@@ -13,19 +13,30 @@ async fn main() {
         _ => {
             let stream_result = TcpStream::connect(args[1].clone()).await;
             match stream_result {
-                Ok(mut stream) => loop {
-                    let mut message = String::new();
+                Ok(socket) => {
+                    println!("Connected suucesfully to the server");
+                    println!("You can type in the terminal to send data to the server");
+                    println!("To escape, enter ^q");
+                    let (mut reader, mut writer) = socket.into_split();
 
-                    println!("Enter your message:");
-                    io::stdin().read_line(&mut message).unwrap();
-                    stream.write_all(message.as_bytes()).await.unwrap();
+                    tokio::spawn(async move {
+                        loop {
+                            let mut buffer = vec![0; 1024];
+                            reader.read_buf(&mut buffer).await.unwrap();
+                            let res = String::from_utf8_lossy(&buffer);
+                            println!(">> {}", res);
+                        }
+                    });
 
-                    let mut buffer = vec![0; message.len()];
-                    stream.read_exact(&mut buffer).await.unwrap();
-
-                    let res = String::from_utf8_lossy(&buffer);
-                    println!("{}", res);
-                },
+                    loop {
+                        let mut message = String::new();
+                        io::stdin().read_line(&mut message).unwrap();
+                        if message.trim() == "^q" {
+                            break;
+                        }
+                        writer.write_all(&message.as_bytes()).await.unwrap();
+                    }
+                }
                 Err(error) => {
                     if error.kind() == ErrorKind::ConnectionRefused {
                         println!("The connection was refused by the host.");
